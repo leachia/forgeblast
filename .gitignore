@@ -1,0 +1,7 @@
+.env
+.vscode/
+uploads/
+PHPMailer/
+vendor/
+*.log
+config.php
