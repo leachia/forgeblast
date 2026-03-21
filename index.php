@@ -1,224 +1,204 @@
-<?php
-session_start();
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit;
-}
+<?php 
+require_once 'config.php'; 
+require_once 'security.php';
+if (!isset($_SESSION['user_id'])) { header("Location: login.php"); exit; } 
+
+$userId = $_SESSION['user_id'];
 $role = $_SESSION['role'] ?? 'user';
 $userName = $_SESSION['name'] ?? 'User';
+
+$masterCode = '';
+if ($role === 'super_admin') {
+    $res = $conn->query("SELECT referral_code FROM users WHERE id = $userId");
+    $u = $res->fetch_assoc();
+    if (empty($u['referral_code'])) {
+        $masterCode = 'ADM-' . strtoupper(substr(md5(uniqid()), 0, 6));
+        $conn->query("UPDATE users SET referral_code = '$masterCode' WHERE id = $userId");
+    } else { $masterCode = $u['referral_code']; }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BlastForge - Premium Email Blast API</title>
+    <title>BlastForge | Tactical Command Dashboard</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Ionicons for beautiful icons -->
     <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
-    <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <!-- Background Effect -->
-    <div class="blob blob-1"></div>
-    <div class="blob blob-2"></div>
+    <div class="mesh-bg"></div>
 
-    <!-- Sidebar -->
     <aside class="sidebar">
-        <div class="brand">
-            <ion-icon name="paper-plane"></ion-icon>
-            BlastForge
+        <div style="font-size:2rem; font-weight:800; margin-bottom:4rem; padding-left:1rem; letter-spacing:-1px;">
+            <span style="color:var(--primary);">Blast</span>Forge
         </div>
-        <ul class="nav-links">
-            <li class="nav-item active" onclick="showTab('dashboard')">
-                <ion-icon name="grid-outline"></ion-icon> Dashboard
-            </li>
-            <li class="nav-item" onclick="showTab('subscribers')">
-                <ion-icon name="people-outline"></ion-icon> Subscribers
-            </li>
-            <li class="nav-item" onclick="showTab('campaigns')">
-                <ion-icon name="mail-outline"></ion-icon> Campaigns
-            </li>
-            <li class="nav-item" onclick="window.location.href='profile.php'">
-                <ion-icon name="person-circle-outline"></ion-icon> Profiles
-            </li>
-            <li class="nav-item" style="margin-top:auto;" onclick="window.location.href='auth_api.php?action=logout'">
-                <ion-icon name="log-out-outline"></ion-icon> Logout
-            </li>
-            <li class="nav-item" style="display:none;" onclick="window.open('api.php?action=getStats', '_blank')">
-                <ion-icon name="code-slash-outline"></ion-icon> API Docs
-            </li>
-        </ul>
+        <nav>
+            <a href="#" class="nav-link active" onclick="showTab('overview', event)"><ion-icon name="speedometer-outline"></ion-icon> Tactical Overview</a>
+            <a href="#" class="nav-link" onclick="showTab('audience', event)"><ion-icon name="people-outline"></ion-icon> Target List</a>
+            <a href="#" class="nav-link" onclick="showTab('blasts', event)"><ion-icon name="paper-plane-outline"></ion-icon> Email Operations</a>
+            <?php if ($role === 'super_admin'): ?>
+                <a href="#" class="nav-link" onclick="showTab('platform', event)"><ion-icon name="shield-outline"></ion-icon> Audit History</a>
+            <?php endif; ?>
+            <a href="profile.php" class="nav-link" style="margin-top:2rem; border-top:1px solid var(--border); padding-top:2rem;"><ion-icon name="settings-sharp"></ion-icon> Portal Settings</a>
+            <a href="auth_api.php?action=logout" class="nav-link" style="color:var(--danger); opacity:0.8;"><ion-icon name="log-out-outline"></ion-icon> Deauthorize</a>
+        </nav>
     </aside>
 
-    <!-- Main Content -->
-    <main class="main-content">
-        <header class="header">
-            <h1 id="page-title">Dashboard</h1>
-            <div style="display: flex; align-items: center; gap: 1.5rem;">
-                <!-- Header Quick Actions -->
-                <div class="header-actions" style="display: flex; gap: 0.75rem;">
-                    <button class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="openModal('subscriber-modal')">
-                        <ion-icon name="person-add-outline"></ion-icon> <span class="hide-mobile">Add Subscriber</span>
-                    </button>
-                    <button class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="openModal('campaign-modal')">
-                        <ion-icon name="send-outline"></ion-icon> <span class="hide-mobile">New Blast</span>
-                    </button>
-                </div>
-                <!-- User Container -->
-                <div class="user-profile" style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; border-left: 1px solid var(--panel-border); padding-left: 1.5rem;">
-                    <ion-icon name="person-circle" style="font-size: 2rem; color: var(--accent-primary);"></ion-icon>
-                    <span class="hide-mobile">
-                        Hi, <?php echo htmlspecialchars($userName); ?>
-                        <small style="color:var(--accent-primary); font-size:0.7rem; text-transform:uppercase; border:1px solid var(--accent-primary); padding:2px 8px; border-radius:12px; margin-left:8px; vertical-align:middle;">
-                            <?php echo htmlspecialchars(str_replace('_', ' ', $role)); ?>
-                        </small>
-                    </span>
-                </div>
+    <main style="margin-left: 280px; padding: 4rem;">
+        <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4rem; animation: slideUpFade 0.7s forwards;">
+            <div>
+                <h1 style="font-size:3rem; font-weight:800; letter-spacing:-1px; margin-bottom:0.5rem;"><?php echo date('H') < 12 ? 'Good Morning' : (date('H') < 18 ? 'Good Afternoon' : 'Good Evening'); ?>, <?php echo explode(' ', $userName)[0]; ?></h1>
+                <p style="color:#94a3b8; font-size:1.1rem;">Commanding the platform as <span style="color:var(--primary-bright); font-weight:600;"><?php echo strtoupper($role); ?></span></p>
+            </div>
+            <div style="display:flex; gap:1.5rem; align-items:center;">
+                <?php if ($role === 'super_admin' || $role === 'admin'): ?>
+                <button class="btn-premium" style="background:rgba(255,255,255,0.02); border:1px solid var(--border); box-shadow:none;" onclick="openModal('onboard-modal')">
+                    <ion-icon name="person-add-outline"></ion-icon> ONBOARD MEMBER
+                </button>
+                <?php endif; ?>
+                <button class="btn-premium" onclick="openModal('campaign-modal')">
+                    <ion-icon name="rocket-outline"></ion-icon> INITIATE BLAST
+                </button>
             </div>
         </header>
 
-        <!-- Stats Section (Dashboard Only) -->
-        <div id="dashboard-tab" class="tab-content">
+        <?php if ($role === 'super_admin'): ?>
+            <div class="card-premium" style="margin-bottom:2.5rem; display:flex; align-items:center; justify-content:space-between; border-left:6px solid var(--primary); animation: slideUpFade 0.8s forwards;">
+                <div>
+                    <h4 style="color:var(--primary-bright); margin-bottom:0.25rem;">MASTER REGISTRATION KEY</h4>
+                    <p style="color:#94a3b8; font-size:0.85rem;">Use this code to authorize new Branch Administrators.</p>
+                </div>
+                <div style="font-size:1.8rem; font-weight:800; color:#fff; letter-spacing:4px; font-family:monospace; background:rgba(0,0,0,0.3); padding:1rem 2rem; border-radius:16px; border:1px solid var(--border);">
+                    <?php echo $masterCode; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <section id="overview-tab" class="tab-content" style="display:block;">
             <div class="stats-grid">
+                <?php if ($role === 'super_admin'): ?>
                 <div class="stat-card">
-                    <div class="stat-title">Total Subscribers</div>
-                    <div class="stat-value" id="stat-subscribers">0</div>
+                    <span class="stat-label">Total Platform Users</span>
+                    <span class="stat-value" id="stat-users">--</span>
+                </div>
+                <?php endif; ?>
+                <div class="stat-card">
+                    <span class="stat-label">Tactical Contacts</span>
+                    <span class="stat-value" id="stat-subs">--</span>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-title">Campaigns Sent</div>
-                    <div class="stat-value" id="stat-campaigns">0</div>
+                    <span class="stat-label">Active Commands</span>
+                    <span class="stat-value" id="stat-camps">--</span>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-title">Total Emails Delivered</div>
-                    <div class="stat-value" id="stat-emails">0</div>
+                    <span class="stat-label">Total Deliveries</span>
+                    <span class="stat-value" id="stat-emails">--</span>
                 </div>
             </div>
 
-            <!-- Recent Activity Panel -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h2 class="panel-title">System Overview</h2>
-                </div>
-                <p style="color: var(--text-muted); line-height: 1.6;">
-                    Welcome to BlastForge. This premium interface connects to the PHP REST API.
-                    Navigate to the Subscribers tab to manage your mailing list, or to the Campaigns tab to dispatch an email blast. Use the buttons in the header for quick actions.
-                </p>
+            <div class="card-premium" style="margin-top:2.5rem; padding:3rem;">
+                <h3 style="margin-bottom:2.5rem; font-size:1.3rem;">Operational Performance Log</h3>
+                <div style="height: 350px;"><canvas id="mainChart"></canvas></div>
             </div>
-        </div>
+        </section>
 
-        <!-- Subscribers Tab -->
-        <div id="subscribers-tab" class="tab-content" style="display: none;">
-            <div class="panel">
-                <div class="panel-header">
-                    <h2 class="panel-title">Mailing List</h2>
-                    <button class="btn btn-primary" onclick="openModal('subscriber-modal')">
-                        <ion-icon name="add-outline"></ion-icon> Add Subscriber
-                    </button>
+        <section id="audience-tab" class="tab-content">
+            <div class="card-premium" style="padding:0;">
+                <div style="padding:2rem 3rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                    <h3>Target Audience</h3>
+                    <input type="text" class="form-control" style="max-width:300px; height:45px;" placeholder="Search targets...">
                 </div>
-                <div class="table-responsive">
-                    <table id="subscribers-table">
-                        <thead>
-                            <tr>
-                                <th id="sub-owner-th" style="display:none;">Owner</th>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Status</th>
-                                <th>Date Added</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Populated via JS -->
-                        </tbody>
+                <div style="padding:1rem 2.5rem;">
+                    <table class="table-premium">
+                        <thead><tr><th>Codename / Name</th><th>Email Vector</th><th>Status</th></tr></thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Campaigns Tab -->
-        <div id="campaigns-tab" class="tab-content" style="display: none;">
-            <div class="panel">
-                <div class="panel-header">
-                    <h2 class="panel-title">Email Campaigns</h2>
-                    <button class="btn btn-primary" onclick="openModal('campaign-modal')">
-                        <ion-icon name="send-outline"></ion-icon> Create Blast
-                    </button>
+        <section id="platform-tab" class="tab-content">
+            <div class="card-premium" style="padding:0;">
+                <div style="padding:2rem 3rem; border-bottom:1px solid var(--border);">
+                    <h3>Audit Trail & Security Logs</h3>
                 </div>
-                <div class="table-responsive">
-                    <table id="campaigns-table">
-                        <thead>
-                            <tr>
-                                <th id="camp-sender-th" style="display:none;">Sender</th>
-                                <th>Subject</th>
-                                <th>Status</th>
-                                <th>Date Sent</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Populated via JS -->
-                        </tbody>
+                <div style="padding:1rem 2.5rem;">
+                    <table class="table-premium">
+                        <thead><tr><th>Timestamp</th><th>Action</th><th>Operation Details</th><th>Terminal / IP</th></tr></thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
-        </div>
-
+        </section>
     </main>
 
-    <!-- Add Subscriber Modal -->
-    <div class="modal-overlay" id="subscriber-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Add New Subscriber</h3>
-                <button class="close-btn" onclick="closeModal('subscriber-modal')"><ion-icon name="close-outline"></ion-icon></button>
-            </div>
-            <form id="subscriber-form">
-                <div class="form-group">
-                    <label>Full Name</label>
-                    <input type="text" id="sub-name" class="form-control" placeholder="John Doe" required>
+    <!-- Modal for Member Onboarding -->
+    <div id="onboard-modal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(15px); z-index:2000; align-items:center; justify-content:center; animation: fadeIn 0.3s;">
+        <div class="card-premium" style="max-width:600px; width:95%; padding:3.5rem; animation: slideUpFade 0.5s;">
+            <h2 style="font-size:2.2rem; font-weight:800; margin-bottom:0.5rem;">NEW <span style="color:var(--primary);">ONBOARDING</span></h2>
+            <p style="color:var(--text-dim); margin-bottom:3rem;">Register a new branch operator or system user.</p>
+            
+            <form id="onboard-form" onsubmit="onboardMember(event)">
+                <div class="form-group" style="margin-bottom:1.5rem;">
+                    <label style="color:#94a3b8; margin-bottom:0.8rem; display:block; font-size:0.8rem; font-weight:700;">FULL CODENAME / NAME</label>
+                    <input type="text" name="name" class="form-control" placeholder="Enter operator name..." required>
                 </div>
-                <div class="form-group">
-                    <label>Email Address</label>
-                    <input type="email" id="sub-email" class="form-control" placeholder="john@example.com" required>
+                <div class="form-group" style="margin-bottom:1.5rem;">
+                    <label style="color:#94a3b8; margin-bottom:0.8rem; display:block; font-size:0.8rem; font-weight:700;">COMMAND EMAIL</label>
+                    <input type="email" name="email" class="form-control" placeholder="user@domain.com" required>
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Save Subscriber</button>
+                <div class="form-group" style="margin-bottom:1.5rem;">
+                    <label style="color:#94a3b8; margin-bottom:0.8rem; display:block; font-size:0.8rem; font-weight:700;">TEMPORARY PASSWORD</label>
+                    <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+                </div>
+                
+                <div style="display:flex; gap:1.5rem; justify-content:flex-end; align-items:center; margin-top:3rem;">
+                    <button type="button" onclick="closeModal('onboard-modal')" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-weight:700;">ABORT</button>
+                    <button type="submit" class="btn-premium">SYNC & ENROLL</button>
+                </div>
             </form>
         </div>
     </div>
 
-    <!-- Create Campaign Modal -->
-    <div class="modal-overlay" id="campaign-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Trigger Email Blast</h3>
-                <button class="close-btn" onclick="closeModal('campaign-modal')"><ion-icon name="close-outline"></ion-icon></button>
+    <!-- Modal for Campaign -->
+    <div id="campaign-modal" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(15px); z-index:2000; align-items:center; justify-content:center; animation: fadeIn 0.3s;">
+        <div class="card-premium" style="max-width:750px; width:95%; animation: slideUpFade 0.5s; padding:3.5rem;">
+            <h2 style="font-size:2.2rem; font-weight:800; letter-spacing:-1px; margin-bottom:0.5rem;">TACTICAL OPERATION <span style="color:var(--primary);">BLAST</span></h2>
+            <p style="color:var(--text-dim); margin-bottom:3rem; font-size:0.95rem;">Configure your payload for mass deployment.</p>
+            
+            <div class="form-group" style="margin-bottom:2rem;">
+                <label style="color:#94a3b8; margin-bottom:1rem; display:block; font-size:0.8rem; font-weight:700; letter-spacing:1px;">TARGET SUBJECT LINE</label>
+                <input type="text" id="camp-subject" class="form-control" placeholder="Enter high-conversion subject...">
             </div>
-            <form id="campaign-form">
-                <div class="form-group">
-                    <label>Email Subject</label>
-                    <input type="text" id="camp-subject" class="form-control" placeholder="Huge Announcement!" required>
-                </div>
-                <div class="form-group">
-                    <label>Email Content (HTML allowed)</label>
-                    <textarea id="camp-content" class="form-control" placeholder="Write your email here..." required></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Attachments (Docs, Pics, Videos)</label>
-                    <input type="file" id="camp-attachments" class="form-control" style="padding: 0.5rem;" multiple>
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Send Blast to All</button>
-            </form>
+            
+            <div class="form-group" style="margin-bottom:2rem;">
+                <label style="color:#94a3b8; margin-bottom:1rem; display:block; font-size:0.8rem; font-weight:700; letter-spacing:1px;">PAYLOAD DESIGN (TEMPLATE)</label>
+                <select id="camp-template" class="form-control" onchange="applyTemplate()">
+                    <option value="">Pure Text Payload</option>
+                    <option value="modern">Modern Visual System</option>
+                    <option value="dark">Midnight Recon Theme</option>
+                </select>
+            </div>
+            
+            <div class="form-group" style="margin-bottom:3rem;">
+                <label style="color:#94a3b8; margin-bottom:1rem; display:block; font-size:0.8rem; font-weight:700; letter-spacing:1px;">MESSAGE MATRIX (CONTENT)</label>
+                <textarea id="camp-content" class="form-control" rows="10" placeholder="Deploy your intelligence here..."></textarea>
+            </div>
+            
+            <div style="display:flex; gap:2rem; justify-content:flex-end; align-items:center;">
+                <button onclick="closeModal('campaign-modal')" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-weight:700; letter-spacing:1px; font-size:0.8rem;">ABORT MISSION</button>
+                <button class="btn-premium" onclick="sendBlast(event)" style="height:55px; width:260px; justify-content:center;">
+                    <ion-icon name="rocket-outline" style="font-size:1.4rem;"></ion-icon> INITIATE DEPLOYMENT
+                </button>
+            </div>
         </div>
     </div>
-
-
-
-    <!-- Toast Notifications -->
-    <div class="toast-container" id="toast-container"></div>
 
     <script>
-        window.currentUserRole = '<?php echo $role; ?>';
+        window.csrfToken = '<?php echo Security::generateCSRF(); ?>';
+        window.role = '<?php echo $role; ?>';
     </script>
     <script src="app.js"></script>
 </body>

@@ -1,157 +1,146 @@
 <?php
-require_once 'db.php';
-require_once 'PHPMailer/Exception.php';
-require_once 'PHPMailer/PHPMailer.php';
-require_once 'PHPMailer/SMTP.php';
+ob_start();
+error_reporting(0);
+ini_set('display_errors', 0);
+require_once 'config.php';
+require_once 'security.php';
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;
-
-$input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+$rawInput = file_get_contents('php://input');
+$jsonData = json_decode($rawInput, true);
+$input = $jsonData ?? $_POST;
 $action = $_GET['action'] ?? '';
 
-// System Email Settings for OTP
-// System Email Settings for OTP
-$smtpHost = 'smtp.gmail.com';
-$smtpUser = 'YOUR_SYSTEM_EMAIL_HERE'; 
-$smtpPass = 'YOUR_APP_PASSWORD_HERE';
-$smtpPort = 465;
-
-function sendOTPEmail($email, $name, $code) {
-    global $smtpHost, $smtpUser, $smtpPass, $smtpPort;
-    $mail = new PHPMailer(true);
-    try {
-        $mail->isSMTP();
-        $mail->Host       = $smtpHost;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = $smtpUser;
-        $mail->Password   = $smtpPass;
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        $mail->Port       = $smtpPort;
-        $mail->setFrom($smtpUser, 'BlastForge Security');
-        $mail->addAddress($email, $name);
-        $mail->isHTML(true);
-        $mail->Subject = 'Your BlastForge Verification Code';
-        $mail->Body    = "<h3>Hello $name,</h3><p>Your 6-digit verification code is: <strong>$code</strong></p><p>Please enter this code on the verification screen to activate your account.</p>";
-        $mail->send();
-        return true;
-    } catch (Exception $e) {
-        return false;
-    }
+function jsonResponse($data, $statusCode = 200) {
+    if (ob_get_length()) ob_clean();
+    http_response_code($statusCode);
+    header('Content-Type: application/json');
+    echo json_encode($data);
+    exit;
 }
 
 switch ($action) {
+
+    // ── REGISTER ──────────────────────────────────────────────────────────────
     case 'register':
-        $name = $conn->real_escape_string($input['name'] ?? '');
-        $email = $conn->real_escape_string($input['email'] ?? '');
-        $pass = $input['password'] ?? '';
-        $refCode = $conn->real_escape_string($input['referral_code'] ?? '');
-        
-        if (empty($name) || empty($email) || empty($pass)) {
-            jsonResponse(['error' => 'All fields are required'], 400);
-        }
-        
-        // Check if email exists
-        $res = $conn->query("SELECT id FROM users WHERE email='$email'");
-        if ($res->num_rows > 0) {
+        $name     = Security::clean($input['name'] ?? '');
+        $email    = strtolower(Security::clean($input['email'] ?? ''));
+        $pass     = $input['password'] ?? '';
+        $refCode  = Security::clean($input['referral_code'] ?? '');
+
+        if (empty($name) || empty($email) || empty($pass))
+            jsonResponse(['error' => 'All fields are required.'], 400);
+
+        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        if ($stmt->get_result()->num_rows > 0)
             jsonResponse(['error' => 'Email already registered. Please sign in.'], 400);
-        }
-        
-        $hashed = password_hash($pass, PASSWORD_DEFAULT);
-        $otp = sprintf("%06d", mt_rand(1, 999999));
-        
-        // Hierarchy Logic
-        $usersCountRes = $conn->query("SELECT COUNT(*) FROM users");
-        $usersCount = $usersCountRes->fetch_row()[0];
-        
-        if ($usersCount === 0) {
+
+        $hashed  = password_hash($pass, PASSWORD_DEFAULT);
+        $otp     = sprintf("%06d", mt_rand(100000, 999999));
+        $role    = 'user';
+        $refAdminId = null;
+
+        $countRes    = $conn->query("SELECT COUNT(*) FROM users");
+        $isFirstUser = ($countRes->fetch_row()[0] == 0);
+
+        if ($isFirstUser) {
             $role = 'super_admin';
-            $refAdminId = "NULL";
-        } else {
-            // Find Referrer
-            $referrerRes = $conn->query("SELECT id, role FROM users WHERE referral_code = '$refCode'");
-            if ($referrerRes->num_rows === 0) {
-                jsonResponse(['error' => 'Invalid Branch/Referral Code. Please contact your administrator.'], 400);
-            }
-            $referrer = $referrerRes->fetch_assoc();
-            $refAdminId = $referrer['id'];
-
-            if ($referrer['role'] === 'super_admin') {
-                $role = 'admin'; // Registered by Super Admin as a new Branch Admin
-            } else if ($referrer['role'] === 'admin') {
-                $role = 'user'; // Registered by Branch Admin as a Member
+        } elseif (!empty($refCode)) {
+            $refStmt = $conn->prepare("SELECT id, role FROM users WHERE referral_code = ?");
+            $refStmt->bind_param("s", $refCode);
+            $refStmt->execute();
+            $res = $refStmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $refAdminId = $row['id'];
+                $role = ($row['role'] === 'super_admin') ? 'admin' : 'user';
             } else {
-                jsonResponse(['error' => 'This referral code cannot be used for registration.'], 400);
-            }
-        }
-
-        $sql = "INSERT INTO users (name, email, password_hash, role, otp_code, referred_by_admin_id) VALUES ('$name', '$email', '$hashed', '$role', '$otp', $refAdminId)";
-        
-        if ($conn->query($sql) === TRUE) {
-            $userId = $conn->insert_id;
-            if (sendOTPEmail($email, $name, $otp)) {
-                jsonResponse(['message' => 'OTP sent to email', 'user_id' => $userId]);
-            } else {
-                jsonResponse(['error' => 'Account created but failed to send OTP email.'], 500);
+                jsonResponse(['error' => 'Invalid Branch Code. Contact your administrator.'], 400);
             }
         } else {
-            jsonResponse(['error' => 'Registration failed'], 500);
+            jsonResponse(['error' => 'A Branch/Referral Code is required to register.'], 400);
         }
+
+        $ins = $conn->prepare("INSERT INTO users (name, email, password_hash, role, otp_code, referred_by_admin_id) VALUES (?, ?, ?, ?, ?, ?)");
+        $ins->bind_param("sssssi", $name, $email, $hashed, $role, $otp, $refAdminId);
+
+        if ($ins->execute()) {
+            $newUserId = $conn->insert_id;
+            // Auto-generate referral code
+            $autoRefCode = strtoupper(substr(md5($newUserId . time()), 0, 8));
+            $conn->query("UPDATE users SET referral_code = '$autoRefCode' WHERE id = $newUserId AND referral_code IS NULL");
+            // Log the registration
+            logUserAction($conn, $newUserId, 'register', "Role: $role");
+            jsonResponse(['message' => 'OTP sent to email.', 'user_id' => $newUserId, 'status' => 'success']);
+        }
+        jsonResponse(['error' => 'Registration failed. Try again.'], 500);
         break;
 
+    // ── OTP VERIFY ────────────────────────────────────────────────────────────
     case 'verify':
         $userId = intval($input['user_id'] ?? 0);
-        $code = $conn->real_escape_string($input['otp_code'] ?? '');
-        
-        $res = $conn->query("SELECT * FROM users WHERE id=$userId AND otp_code='$code' AND is_verified=0");
-        if ($res->num_rows > 0) {
-            $user = $res->fetch_assoc();
-            $conn->query("UPDATE users SET is_verified=1, otp_code=NULL WHERE id=$userId");
-            
-            // Auto-Subscribe to Admin's list (User ID 1 is always the platform owner)
-            $conn->query("INSERT IGNORE INTO subscribers (user_id, name, email) VALUES (1, '{$user['name']}', '{$user['email']}')");
-
-            // Auto Login
+        $code   = Security::clean($input['otp_code'] ?? '');
+        $stmt   = $conn->prepare("SELECT * FROM users WHERE id = ? AND otp_code = ?");
+        $stmt->bind_param("is", $userId, $code);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($user = $res->fetch_assoc()) {
+            $conn->query("UPDATE users SET is_verified = 1, otp_code = NULL WHERE id = $userId");
             $_SESSION['user_id'] = $user['id'];
-            $_SESSION['role'] = $user['role'];
-            $_SESSION['name'] = $user['name'];
-
-            jsonResponse(['message' => 'Account verified and logged in!']);
-        } else {
-            jsonResponse(['error' => 'Invalid OTP Code'], 400);
+            $_SESSION['role']    = $user['role'];
+            $_SESSION['name']    = $user['name'];
+            jsonResponse(['message' => 'Verified!', 'status' => 'success']);
         }
+        jsonResponse(['error' => 'Invalid or expired OTP code.'], 400);
         break;
 
+    // ── LOGIN ─────────────────────────────────────────────────────────────────
     case 'login':
-        $email = $conn->real_escape_string($input['email'] ?? '');
-        $pass = $input['password'] ?? '';
-        
-        $res = $conn->query("SELECT * FROM users WHERE email='$email'");
-        if ($res->num_rows > 0) {
-            $user = $res->fetch_assoc();
-            if ($user['is_verified'] == 0) {
-                jsonResponse(['error' => 'Please verify your email first. Contact support.', 'needs_verification' => true], 403);
-            }
+        $email = strtolower(Security::clean($input['email'] ?? ''));
+        $pass  = $input['password'] ?? '';
+        $stmt  = $conn->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($user = $res->fetch_assoc()) {
+            if ($user['status'] === 'suspended')
+                jsonResponse(['error' => 'Your account has been suspended. Contact the administrator.'], 403);
+            if (!$user['is_verified'])
+                jsonResponse(['error' => 'Please verify your email first.', 'needs_verification' => true, 'user_id' => $user['id']], 403);
             if (password_verify($pass, $user['password_hash'])) {
                 $_SESSION['user_id'] = $user['id'];
-                $_SESSION['role'] = $user['role'];
-                $_SESSION['name'] = $user['name'];
-                jsonResponse(['message' => 'Logged in successfully']);
-            } else {
-                jsonResponse(['error' => 'Incorrect password'], 401);
+                $_SESSION['role']    = $user['role'];
+                $_SESSION['name']    = $user['name'];
+                // Mark online & log login
+                $uid = $user['id'];
+                $conn->query("UPDATE users SET is_online = 1, last_login = NOW(), last_seen = NOW() WHERE id = $uid");
+                logUserAction($conn, $uid, 'login', 'Login via email/password');
+                jsonResponse(['message' => 'Welcome back!', 'status' => 'success']);
             }
-        } else {
-            jsonResponse(['error' => 'Email not found'], 404);
         }
+        jsonResponse(['error' => 'Incorrect email or password.'], 401);
         break;
 
+    // ── LOGOUT ────────────────────────────────────────────────────────────────
     case 'logout':
+        if (isset($_SESSION['user_id'])) {
+            $uid = intval($_SESSION['user_id']);
+            $conn->query("UPDATE users SET is_online = 0, last_seen = NOW() WHERE id = $uid");
+            logUserAction($conn, $uid, 'logout');
+        }
         session_destroy();
         header('Location: login.php');
         exit;
 
-    default:
-        jsonResponse(['error' => 'Invalid action'], 400);
+    // ── HEARTBEAT (Keep-alive online status) ─────────────────────────────────
+    case 'heartbeat':
+        if (isset($_SESSION['user_id'])) {
+            $uid = intval($_SESSION['user_id']);
+            $conn->query("UPDATE users SET is_online = 1, last_seen = NOW(), last_activity = NOW() WHERE id = $uid");
+            jsonResponse(['status' => 'ok']);
+        }
+        jsonResponse(['error' => 'Not authenticated'], 401);
+        break;
 }
-?>
+
+jsonResponse(['error' => 'Invalid action.'], 400);
