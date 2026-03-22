@@ -170,3 +170,24 @@ select.form-control option {
     border-color: var(--primary) !important;
     box-shadow: 0 30px 60px rgba(0,0,0,0.4), 0 0 20px rgba(139, 92, 246, 0.15) !important;
 }
+
+/* 🏷️ Status Badges */
+[class^="badge-"] {
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.badge-queued { background: rgba(139, 92, 246, 0.15); color: var(--primary-bright); border: 1px solid rgba(139, 92, 246, 0.3); }
+.badge-sending { background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3); animation: pulse 2s infinite; }
+.badge-completed { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+.badge-sent { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+.badge-failed { background: rgba(248, 113, 113, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); }
+
+@keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.95); }
+    100% { opacity: 1; transform: scale(1); }
+}

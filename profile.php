@@ -136,7 +136,8 @@ if ($user['role'] === 'super_admin') {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
     </style>
 </head>
-<body class="mesh-bg">
+<body>
+<div class="mesh-bg"></div>
 <div class="profile-page">
 
     <!-- ── Header ──────────────────────────────────────────────────────── -->
@@ -158,8 +159,8 @@ if ($user['role'] === 'super_admin') {
     <!-- Master Code Banner -->
     <div class="master-code-banner">
         <div>
-            <div style="font-weight:800; font-size:1rem; margin-bottom:0.25rem;"><ion-icon name="key-outline" style="color:var(--primary); vertical-align:middle;"></ion-icon> Master Branch Registration Code</div>
-            <div style="color:var(--text-dim); font-size:0.8rem;">Share this code with your Branch Admins to let them register.</div>
+            <div style="font-weight:800; font-size:1rem; margin-bottom:0.25rem;"><ion-icon name="key-outline" style="color:var(--primary); vertical-align:middle;"></ion-icon> Master Referral Code</div>
+            <div style="color:var(--text-dim); font-size:0.8rem;">Share this code with your new users so they can register.</div>
         </div>
         <div style="text-align:center;">
             <div class="referral-box" style="min-width:180px; margin:0;">
@@ -173,7 +174,6 @@ if ($user['role'] === 'super_admin') {
     <div class="content-card">
         <div class="content-tabs">
             <button class="ctab active" onclick="switchCTab(this,'ctab-users')"><ion-icon name="people-outline" style="vertical-align:middle;"></ion-icon> All Users</button>
-            <button class="ctab" onclick="switchCTab(this,'ctab-logs')"><ion-icon name="list-outline" style="vertical-align:middle;"></ion-icon> Activity Logs</button>
             <button class="ctab" onclick="switchCTab(this,'ctab-myprofile')"><ion-icon name="person-outline" style="vertical-align:middle;"></ion-icon> My Profile</button>
         </div>
 
@@ -181,14 +181,20 @@ if ($user['role'] === 'super_admin') {
         <div class="ctab-panel active" id="ctab-users">
             <div id="users-grid" class="users-grid">
                 <?php foreach ($allUsers as $u): ?>
-                <div class="user-card" onclick="openEditModal(<?php echo htmlspecialchars(json_encode($u), ENT_QUOTES, 'UTF-8'); ?>)">
+                <?php 
+                    // Hide regular users who were referred by OTHER admins
+                    if ($u['id'] !== $userId && $u['role'] === 'user' && !empty($u['referred_by_admin_id']) && $u['referred_by_admin_id'] != $userId) {
+                        continue; 
+                    }
+                ?>
+                <div class="user-card" onclick='viewUserDetails(<?php echo json_encode($u, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP); ?>)'>
                     <!-- Online Indicator -->
                     <div class="online-indicator <?php echo $u['is_online'] ? 'online' : ''; ?>" title="<?php echo $u['is_online'] ? 'Online Now' : 'Offline'; ?>"></div>
 
                     <!-- Action Buttons (only for non-self) -->
                     <?php if ($u['id'] !== $userId): ?>
                     <div class="card-actions">
-                        <button class="card-action-btn" style="background:var(--primary); color:#fff;" onclick='event.stopPropagation(); openEditModal(<?php echo htmlspecialchars(json_encode($u), ENT_QUOTES, "UTF-8"); ?>)' title="Edit">
+                        <button class="card-action-btn" style="background:var(--primary); color:#fff;" onclick='event.stopPropagation(); openEditModal(<?php echo json_encode($u, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP); ?>)' title="Edit">
                             <ion-icon name="create-outline"></ion-icon>
                         </button>
                         <button class="card-action-btn" style="background:rgba(239,68,68,0.8); color:#fff;" onclick="event.stopPropagation(); deleteUser(<?php echo $u['id']; ?>, '<?php echo addslashes($u['name']); ?>')" title="Delete">
@@ -210,7 +216,7 @@ if ($user['role'] === 'super_admin') {
                             onchange="event.stopPropagation(); changeRole(<?php echo $u['id']; ?>, this.value)"
                             onclick="event.stopPropagation()">
                         <option value="user" <?php echo $u['role']==='user' ? 'selected' : ''; ?>>Member (User)</option>
-                        <option value="admin" <?php echo $u['role']==='admin' ? 'selected' : ''; ?>>Branch Admin</option>
+                        <option value="admin" <?php echo $u['role']==='admin' ? 'selected' : ''; ?>>Admin</option>
                     </select>
                     <?php else: ?>
                     <div style="margin-top:0.75rem;"><span class="role-badge"><?php echo strtoupper($u['role']); ?></span></div>
@@ -220,11 +226,11 @@ if ($user['role'] === 'super_admin') {
                     <div class="user-card-stats">
                         <div class="stat-box">
                             <div class="stat-num"><?php echo $u['campaign_count']; ?></div>
-                            <div class="stat-lbl">Blasts</div>
+                            <div class="stat-lbl">Campaigns</div>
                         </div>
                         <div class="stat-box">
                             <div class="stat-num"><?php echo $u['emails_sent']; ?></div>
-                            <div class="stat-lbl">Sent</div>
+                            <div class="stat-lbl">Emails Sent</div>
                         </div>
                     </div>
                     <?php if (!empty($u['last_login'])): ?>
@@ -233,60 +239,9 @@ if ($user['role'] === 'super_admin') {
                 </div>
                 <?php endforeach; ?>
             </div>
-        </div>
 
-        <!-- ── TAB: Activity Logs ──────────────────────────────────────── -->
-        <div class="ctab-panel" id="ctab-logs">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-                <h3 style="font-size:1rem; font-weight:800;">System Activity Logs</h3>
-                <div style="display:flex; gap:0.5rem;">
-                    <button onclick="filterLog('all')" class="log-filter-btn active" data-f="all" style="background:rgba(255,255,255,0.08); border:1px solid var(--border); color:#fff; padding:0.35rem 0.85rem; border-radius:20px; cursor:pointer; font-size:0.72rem; font-weight:700;">All</button>
-                    <button onclick="filterLog('login')" class="log-filter-btn" data-f="login" style="background:rgba(52,211,153,0.1); border:1px solid rgba(52,211,153,0.2); color:#34d399; padding:0.35rem 0.85rem; border-radius:20px; cursor:pointer; font-size:0.72rem; font-weight:700;">Login</button>
-                    <button onclick="filterLog('logout')" class="log-filter-btn" data-f="logout" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#f87171; padding:0.35rem 0.85rem; border-radius:20px; cursor:pointer; font-size:0.72rem; font-weight:700;">Logout</button>
-                </div>
-            </div>
-            <div style="overflow-x:auto;">
-                <table class="log-table" id="log-table-body">
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Action</th>
-                            <th>IP Address</th>
-                            <th>Date & Time</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($activityLogs as $log): ?>
-                        <tr data-action="<?php echo $log['action']; ?>">
-                            <td>
-                                <div style="display:flex; align-items:center; gap:0.75rem;">
-                                    <img src="<?php echo htmlspecialchars($log['avatar']); ?>" style="width:32px; height:32px; border-radius:50%; object-fit:cover;" onerror="this.src='https://ui-avatars.com/api/?name=<?php echo urlencode($log['name']); ?>&background=random&size=32'">
-                                    <div>
-                                        <div style="font-weight:600; font-size:0.82rem;"><?php echo htmlspecialchars($log['name']); ?></div>
-                                        <div style="color:var(--text-dim); font-size:0.68rem;"><?php echo htmlspecialchars($log['email']); ?></div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="log-action <?php echo $log['action']; ?>">
-                                    <?php
-                                    $icons = ['login'=>'log-in','logout'=>'log-out','register'=>'person-add','campaign_sent'=>'send','profile_update'=>'create'];
-                                    echo '<ion-icon name="'.($icons[$log['action']] ?? 'ellipse').'-outline"></ion-icon>';
-                                    echo strtoupper($log['action']);
-                                    ?>
-                                </span>
-                            </td>
-                            <td style="font-family:monospace; color:var(--text-dim); font-size:0.78rem;"><?php echo htmlspecialchars($log['ip_address'] ?? '-'); ?></td>
-                            <td style="color:var(--text-dim); font-size:0.78rem; white-space:nowrap;"><?php echo date('M d, Y h:i:s A', strtotime($log['created_at'])); ?></td>
-                            <td style="color:var(--text-dim); font-size:0.75rem;"><?php echo htmlspecialchars($log['notes'] ?? ''); ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                        <?php if (empty($activityLogs)): ?>
-                        <tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding:3rem;"><ion-icon name="document-text-outline" style="font-size:2rem; display:block; margin-bottom:0.5rem;"></ion-icon> No activity logs yet.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+            <div id="user-details-view" style="display:none; animation:slideUpFade 0.3s forwards;">
+                <!-- Dynamically populated -->
             </div>
         </div>
 
@@ -491,7 +446,7 @@ if ($user['role'] === 'super_admin') {
                         </a>
                         <?php endif; ?>
 
-                        <div class="form-section-title">SMTP Configuration (Fallback)</div>
+                        <div class="form-section-title">Primary SMTP (Priority 1)</div>
                         <div class="fields-grid">
                             <div>
                                 <label class="field-label">SMTP Host</label>
@@ -499,15 +454,35 @@ if ($user['role'] === 'super_admin') {
                             </div>
                             <div>
                                 <label class="field-label">SMTP Port</label>
-                                <input type="number" name="smtp_port" class="field-input" placeholder="465" value="<?php echo htmlspecialchars($user['smtp_port'] ?? ''); ?>">
+                                <input type="number" name="smtp_port" class="field-input" placeholder="587" value="<?php echo htmlspecialchars($user['smtp_port'] ?? ''); ?>">
                             </div>
                             <div>
-                                <label class="field-label">SMTP Username</label>
-                                <input type="text" name="smtp_user" class="field-input" placeholder="you@gmail.com" value="<?php echo htmlspecialchars($user['smtp_user'] ?? ''); ?>">
+                                <label class="field-label">SMTP User</label>
+                                <input type="text" name="smtp_user" class="field-input" placeholder="user@gmail.com" value="<?php echo htmlspecialchars($user['smtp_user'] ?? ''); ?>">
                             </div>
                             <div>
-                                <label class="field-label">SMTP Password</label>
-                                <input type="password" name="smtp_pass" class="field-input" placeholder="App password" value="<?php echo htmlspecialchars($user['smtp_pass'] ?? ''); ?>">
+                                <label class="field-label">SMTP Pass</label>
+                                <input type="password" name="smtp_pass" class="field-input" placeholder="••••••••">
+                            </div>
+                        </div>
+
+                        <div class="form-section-title">Backup SMTP (Failover)</div>
+                        <div class="fields-grid">
+                            <div>
+                                <label class="field-label">Backup Host</label>
+                                <input type="text" name="backup_smtp_host" class="field-input" placeholder="smtp.sendgrid.net" value="<?php echo htmlspecialchars($user['backup_smtp_host'] ?? ''); ?>">
+                            </div>
+                            <div>
+                                <label class="field-label">Backup Port</label>
+                                <input type="number" name="backup_smtp_port" class="field-input" placeholder="587" value="<?php echo htmlspecialchars($user['backup_smtp_port'] ?? ''); ?>">
+                            </div>
+                            <div>
+                                <label class="field-label">Backup User</label>
+                                <input type="text" name="backup_smtp_user" class="field-input" value="<?php echo htmlspecialchars($user['backup_smtp_user'] ?? ''); ?>">
+                            </div>
+                            <div>
+                                <label class="field-label">Backup Pass</label>
+                                <input type="password" name="backup_smtp_pass" class="field-input" placeholder="••••••••">
                             </div>
                         </div>
                     </div>
@@ -680,13 +655,6 @@ document.getElementById('master-code')?.addEventListener('click', function() {
     copyCode(this.textContent.trim());
 });
 
-// ── Activity Log Filter ───────────────────────────────────────────────────
-function filterLog(action) {
-    document.querySelectorAll('.log-filter-btn').forEach(b => b.style.opacity = b.dataset.f === action ? '1' : '0.5');
-    document.querySelectorAll('#log-table-body tbody tr').forEach(row => {
-        row.style.display = (action === 'all' || row.dataset.action === action) ? '' : 'none';
-    });
-}
 
 // ── Preview Avatar ────────────────────────────────────────────────────────
 function previewAvatar(input) {
@@ -711,7 +679,7 @@ async function saveProfile(e) {
     fd.append('dark_mode', e.target.querySelector('[name="dark_mode"]')?.checked ? '1' : '0');
 
     try {
-        const res = await fetch('api.php?action=updateProfile', { method:'POST', body:fd });
+        const res = await fetch('api.php?action=updateProfile', { method:'POST', headers:{'X-CSRF-TOKEN': window.csrfToken}, body:fd });
         const data = await res.json();
         if (res.ok) showToast(data.message || 'Profile saved!');
         else showToast(data.error || 'Error saving profile.', 'error');
@@ -726,7 +694,7 @@ async function saveSAProfile(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
     try {
-        const res = await fetch('api.php?action=updateProfile', { method:'POST', body:fd });
+        const res = await fetch('api.php?action=updateProfile', { method:'POST', headers:{'X-CSRF-TOKEN': window.csrfToken}, body:fd });
         const data = await res.json();
         if (res.ok) showToast(data.message || 'Profile saved!');
         else showToast(data.error || 'Error.', 'error');
@@ -741,7 +709,7 @@ async function changeRole(userId, newRole) {
     try {
         const res = await fetch('api.php?action=updateRole', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.csrfToken},
             body: JSON.stringify({ target_id: userId, role: newRole })
         });
         const data = await res.json();
@@ -754,7 +722,7 @@ async function changeRole(userId, newRole) {
 async function deleteUser(userId, name) {
     if (!confirm(`⚠️ PERMANENTLY delete "${name}" and ALL their data? This cannot be undone.`)) return;
     try {
-        const res = await fetch(`api.php?action=deleteUser&id=${userId}`, { method:'DELETE' });
+        const res = await fetch(`api.php?action=deleteUser&id=${userId}`, { method:'DELETE', headers:{'X-CSRF-TOKEN': window.csrfToken} });
         const data = await res.json();
         if (res.ok) { showToast('User deleted.'); setTimeout(() => location.reload(), 1200); }
         else showToast(data.error || 'Failed.', 'error');
@@ -792,7 +760,7 @@ async function saveEditUser(e) {
     const prev = btn.innerHTML; btn.disabled = true; btn.textContent = 'Saving...';
     const fd = new FormData(e.target);
     try {
-        const res = await fetch('api.php?action=adminUpdateUser', { method:'POST', body:fd });
+        const res = await fetch('api.php?action=adminUpdateUser', { method:'POST', headers:{'X-CSRF-TOKEN': window.csrfToken}, body:fd });
         const data = await res.json();
         if (res.ok) { showToast('User updated!'); closeEditModal(); setTimeout(() => location.reload(), 1200); }
         else showToast(data.error || 'Error.', 'error');
@@ -811,6 +779,146 @@ setInterval(heartbeat, 60000);
 window.addEventListener('beforeunload', () => {
     navigator.sendBeacon('auth_api.php?action=heartbeat');
 });
+
+// ── User Details View (Transactions) ──────────────────────────────────────
+window.allUsersData = <?php echo json_encode($allUsers ?? [], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+
+function escapeHtml(unsafe) {
+    if(!unsafe) return '';
+    return (unsafe+'').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function viewUserDetails(u) {
+    document.getElementById('users-grid').style.display = 'none';
+    const view = document.getElementById('user-details-view');
+    view.style.display = 'block';
+    
+    // Header & Edit Button
+    view.innerHTML = `
+        <div style="margin-bottom: 1.5rem;">
+            <button onclick="closeUserDetails()" style="background:transparent; border:none; color:var(--text-dim); cursor:pointer; font-weight:700;"><ion-icon name="arrow-back-outline" style="vertical-align:middle; margin-right:4px;"></ion-icon> Back to All Users</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 2.5rem; background:rgba(255,255,255,0.02); border:1px solid var(--border); padding:2rem; border-radius:1rem;">
+            <div style="display:flex; align-items:center; gap: 1.5rem;">
+                <img src="${escapeHtml(u.avatar)}" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--primary);" onerror="this.src=\'https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random\'">
+                <div>
+                    <h2 style="font-size:1.8rem; font-weight:800; margin-bottom:0.25rem; color:var(--primary-bright);">${escapeHtml(u.name)}</h2>
+                    <div style="color:var(--text-dim); font-size:0.9rem; margin-bottom:0.5rem;">${escapeHtml(u.email)}</div>
+                    <span class="role-badge" style="margin-top:0;">${u.role.toUpperCase()}</span>
+                </div>
+            </div>
+            <button class="btn-premium" onclick="openEditModal(${escapeHtml(JSON.stringify(u))})" style="padding: 0.75rem 1.5rem; font-size:0.85rem;"><ion-icon name="create-outline"></ion-icon> Edit User Info</button>
+        </div>
+        
+        <h3 style="font-size:1.1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem; margin-bottom:1rem; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase;">Recent Transactions (Campaigns)</h3>
+        <div id="user-campaigns-list">
+            <div style="color:var(--text-dim); padding:2rem 0; font-style:italic;"><ion-icon name="sync-outline" style="animation:pulse 1s infinite;"></ion-icon> Loading transactions...</div>
+        </div>
+    `;
+
+    // Fetch Transactions
+    fetch('api.php?action=getCampaigns&target_user_id=' + u.id)
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('user-campaigns-list');
+            if(data.campaigns && data.campaigns.length > 0) {
+                let rows = '';
+                data.campaigns.forEach(c => {
+                    rows += `
+                        <tr>
+                            <td style="color:var(--text-dim); font-size:0.8rem;">${new Date(c.created_at).toLocaleString()}</td>
+                            <td style="font-weight:700; color:#fff;">${escapeHtml(c.name)}</td>
+                            <td style="color:var(--text-dim); font-size:0.85rem;">${escapeHtml(u.name)} <br><span style="font-size:0.75rem; opacity:0.7;">via ${escapeHtml(u.smtp_user || u.email)}</span></td>
+                            <td style="color:var(--primary-bright); font-weight:800; text-align:center;">${c.sent_count}</td>
+                            <td style="text-align:right;">
+                                ${c.read_count > 0 ? `<span style="display:inline-flex; align-items:center; gap:0.3rem; background:rgba(52,211,153,0.1); color:#34d399; padding:0.3rem 0.6rem; border-radius:20px; font-size:0.7rem; font-weight:700;"><span class="online-dot" style="animation:none;"></span> ${c.read_count} Opened</span>` : `<span style="color:var(--text-dim); font-size:0.7rem; font-weight:700;">Unread</span>`}
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                list.innerHTML = `
+                    <div style="overflow-x:auto;">
+                        <table class="table-premium" style="width:100%;">
+                            <thead>
+                                <tr>
+                                    <th style="padding:1rem;">Date Overview</th>
+                                    <th style="padding:1rem;">Email Subject Name</th>
+                                    <th style="padding:1rem;">Sent From</th>
+                                    <th style="text-align:center; padding:1rem;">Total Sent</th>
+                                    <th style="text-align:right; padding:1rem;">Live Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                list.innerHTML = `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:0.75rem; color:var(--text-dim); padding:3rem; text-align:center;"><ion-icon name="document-text-outline" style="font-size:3rem; opacity:0.5; margin-bottom:1rem;"></ion-icon><br>This user hasn't sent any email campaigns yet.</div>`;
+            }
+
+            // Also fetch the specific user's activity log!
+            fetch('api.php?action=getUserLogs&target_user_id=' + u.id)
+                .then(lr => lr.json())
+                .then(lData => {
+                    let logHtml = `<h3 style="font-size:1.1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem; margin-top:3rem; margin-bottom:1.5rem; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase;">Personal Activity Log</h3>`;
+                    if(lData.logs && lData.logs.length > 0) {
+                        logHtml += `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:1rem; overflow:hidden;"><table class="table-premium" style="width:100%;">
+                            <tbody>`;
+                        lData.logs.forEach(l => {
+                            let clr = 'var(--text-dim)';
+                            if(l.action === 'login') clr = '#34d399';
+                            if(l.action === 'logout') clr = '#f87171';
+                            if(l.action === 'campaign_sent') clr = '#8b5cf6';
+                            logHtml += `<tr>
+                                <td style="color:var(--text-dim); font-size:0.75rem; width:150px;">${new Date(l.created_at).toLocaleString()}</td>
+                                <td style="font-weight:800; color:${clr}; font-size:0.75rem; text-transform:uppercase; width:120px;">${l.action.replace('_',' ')}</td>
+                                <td style="color:var(--text-dim); font-size:0.8rem;">${escapeHtml(l.notes)}</td>
+                                <td style="color:var(--text-dim); font-size:0.7rem; font-family:monospace; text-align:right;">${escapeHtml(l.ip_address)}</td>
+                            </tr>`;
+                        });
+                        logHtml += `</tbody></table></div>`;
+                    } else {
+                        logHtml += `<div style="color:var(--text-dim); font-style:italic;">No activity records found.</div>`;
+                    }
+                    view.innerHTML += logHtml;
+                });
+            
+            // Show registered users under this admin
+            const myUsers = window.allUsersData.filter(x => x.referred_by_admin_id == u.id);
+            if(myUsers.length > 0) {
+                let userRows = myUsers.map(x => `
+                    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:1rem; padding:1.25rem; display:flex; align-items:center; gap:1rem; transition:transform 0.2s; cursor:pointer;" onclick="viewUserDetails(${escapeHtml(JSON.stringify(x).replace(/'/g, '&#39;'))})">
+                        <img src="${escapeHtml(x.avatar)}" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--primary);" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(x.name)}&background=random'">
+                        <div style="flex:1;">
+                            <h4 style="margin:0; font-weight:800; color:var(--primary-bright); font-size:0.95rem;">${escapeHtml(x.name)}</h4>
+                            <div style="color:var(--text-dim); font-size:0.75rem;">${escapeHtml(x.email)}</div>
+                            <span class="role-badge" style="margin-top:0.4rem; padding:0.2rem 0.6rem; font-size:0.6rem;">${x.role.toUpperCase()}</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); openEditModal(${escapeHtml(JSON.stringify(x).replace(/'/g, '&#39;'))})" style="background:transparent; border:none; color:var(--primary); font-size:1.2rem; cursor:pointer;"><ion-icon name="create-outline"></ion-icon></button>
+                    </div>
+                `).join('');
+
+                view.innerHTML += `
+                    <h3 style="font-size:1.1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem; margin-top:3rem; margin-bottom:1.5rem; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase;">Registered Users Under This Admin</h3>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:1rem;">
+                        ${userRows}
+                    </div>
+                `;
+            }
+        })
+        .catch(err => {
+            document.getElementById('user-campaigns-list').innerHTML = '<div style="color:#f87171; padding:2rem 0;">Error loading transactions.</div>';
+        });
+}
+
+function closeUserDetails() {
+    document.getElementById('user-details-view').style.display = 'none';
+    document.getElementById('users-grid').style.display = 'grid';
+}
+
 </script>
 </body>
 </html>

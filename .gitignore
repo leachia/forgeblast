@@ -5,3 +5,6 @@ PHPMailer/
 vendor/
 *.log
 config.php
+worker_heartbeat.txt
+test*.php
+*.csv

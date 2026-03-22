@@ -1,9 +1,10 @@
 <?php
-// GOOGLE OAUTH CONFIGURATION
-// REPLACE THESE WITH YOUR OWN GOOGLE CONSOLE PROJECT CREDENTIALS
-define('GOOGLE_CLIENT_ID', 'YOUR_GOOGLE_CLIENT_ID_HERE');
-define('GOOGLE_CLIENT_SECRET', 'YOUR_GOOGLE_CLIENT_SECRET_HERE');
-define('GOOGLE_REDIRECT_URL', 'YOUR_GOOGLE_REDIRECT_URL_HERE');
+// GOOGLE OAUTH CONFIGURATION (Loads from .env for security)
+if (!defined('GOOGLE_CLIENT_ID')) {
+    define('GOOGLE_CLIENT_ID', $_ENV['GOOGLE_CLIENT_ID'] ?? '');
+    define('GOOGLE_CLIENT_SECRET', $_ENV['GOOGLE_CLIENT_SECRET'] ?? '');
+    define('GOOGLE_REDIRECT_URL', 'http://localhost/emailblast/google_callback.php');
+}
 
 // Scopes required for Gmail sending
 define('GOOGLE_SCOPES', 'https://www.googleapis.com/auth/gmail.send');

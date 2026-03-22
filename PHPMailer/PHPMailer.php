@@ -1,5 +1,4 @@
 <?php
-
 /**
  * PHPMailer - PHP email creation and transport class.
  * PHP Version 5.5.
@@ -20,6 +19,7 @@
  */
 
 namespace PHPMailer\PHPMailer;
+require_once __DIR__ . '/Polyfills.php';
 
 /**
  * PHPMailer - PHP email creation and transport class.
@@ -5168,15 +5168,15 @@ class PHPMailer
         }
         if (openssl_sign($signHeader, $signature, $privKey, 'sha256WithRSAEncryption')) {
             if (\PHP_MAJOR_VERSION < 8) {
-                // phpcs:ignore PHPCompatibility.FunctionUse.RemovedFunctions.openssl_pkey_freeDeprecated
-                openssl_pkey_free($privKey);
+                // Silently free on older PHP versions
+                call_user_func("openssl_pkey_free", $privKey);
             }
 
             return base64_encode($signature);
         }
         if (\PHP_MAJOR_VERSION < 8) {
-            // phpcs:ignore PHPCompatibility.FunctionUse.RemovedFunctions.openssl_pkey_freeDeprecated
-            openssl_pkey_free($privKey);
+            // Silently free on older PHP versions
+            call_user_func("openssl_pkey_free", $privKey);
         }
 
         return '';

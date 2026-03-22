@@ -20,6 +20,7 @@
  */
 
 namespace PHPMailer\PHPMailer;
+require_once __DIR__ . '/Polyfills.php';
 
 /**
  * PHPMailer RFC821 SMTP email transport class.

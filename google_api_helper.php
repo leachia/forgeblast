@@ -1,6 +1,6 @@
 <?php
-require_once 'google_config.php';
 require_once 'db.php';
+require_once 'google_config.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;

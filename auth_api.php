@@ -1,9 +1,9 @@
 <?php
 ob_start();
-error_reporting(0);
-ini_set('display_errors', 0);
-require_once 'config.php';
+session_start();
+require_once 'db.php';
 require_once 'security.php';
+require_once 'mailer_functions.php';
 
 $rawInput = file_get_contents('php://input');
 $jsonData = json_decode($rawInput, true);
@@ -61,37 +61,70 @@ switch ($action) {
             jsonResponse(['error' => 'A Branch/Referral Code is required to register.'], 400);
         }
 
-        $ins = $conn->prepare("INSERT INTO users (name, email, password_hash, role, otp_code, referred_by_admin_id) VALUES (?, ?, ?, ?, ?, ?)");
-        $ins->bind_param("sssssi", $name, $email, $hashed, $role, $otp, $refAdminId);
+        $otp = sprintf("%06d", mt_rand(1, 999999));
+        $isVerified = 0; // Forced verification for all roles
+        
+        $ins = $conn->prepare("INSERT INTO users (name, email, password_hash, role, otp_code, otp_expires_at, referred_by_admin_id, is_verified) VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), ?, ?)");
+        $ins->bind_param("sssssii", $name, $email, $hashed, $role, $otp, $refAdminId, $isVerified);
 
         if ($ins->execute()) {
             $newUserId = $conn->insert_id;
             // Auto-generate referral code
             $autoRefCode = strtoupper(substr(md5($newUserId . time()), 0, 8));
             $conn->query("UPDATE users SET referral_code = '$autoRefCode' WHERE id = $newUserId AND referral_code IS NULL");
+            
+            // 📧 Send Authentication OTP
+            sendOTP($email, $name, $otp);
+
             // Log the registration
-            logUserAction($conn, $newUserId, 'register', "Role: $role");
-            jsonResponse(['message' => 'OTP sent to email.', 'user_id' => $newUserId, 'status' => 'success']);
+            logUserAction($conn, $newUserId, 'register', "Role: $role (Status: Pending Verification)");
+
+            jsonResponse(['message' => 'A verification code has been sent to your email.', 'user_id' => $newUserId, 'status' => 'success']);
+        } else {
+            jsonResponse(['error' => 'Database Error: ' . $conn->error], 500);
         }
-        jsonResponse(['error' => 'Registration failed. Try again.'], 500);
         break;
 
     // ── OTP VERIFY ────────────────────────────────────────────────────────────
     case 'verify':
         $userId = intval($input['user_id'] ?? 0);
         $code   = Security::clean($input['otp_code'] ?? '');
-        $stmt   = $conn->prepare("SELECT * FROM users WHERE id = ? AND otp_code = ?");
+        $stmt   = $conn->prepare("SELECT * FROM users WHERE id = ? AND otp_code = ? AND otp_expires_at > NOW()");
         $stmt->bind_param("is", $userId, $code);
         $stmt->execute();
         $res = $stmt->get_result();
         if ($user = $res->fetch_assoc()) {
-            $conn->query("UPDATE users SET is_verified = 1, otp_code = NULL WHERE id = $userId");
+            $conn->query("UPDATE users SET is_verified = 1, is_online = 1, last_login = NOW(), otp_code = NULL, otp_expires_at = NULL WHERE id = $userId");
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['role']    = $user['role'];
             $_SESSION['name']    = $user['name'];
-            jsonResponse(['message' => 'Verified!', 'status' => 'success']);
+            logUserAction($conn, $userId, 'verify', 'Email verified successfully via OTP');
+            jsonResponse(['message' => 'Verification successful!', 'status' => 'success']);
         }
-        jsonResponse(['error' => 'Invalid or expired OTP code.'], 400);
+        jsonResponse(['error' => 'Invalid or expired OTP code. Please request a new one.'], 400);
+        break;
+
+    // ── RESEND OTP ────────────────────────────────────────────────────────────
+    case 'resend_otp':
+        $userId = intval($input['user_id'] ?? 0);
+        $stmt = $conn->prepare("SELECT name, email, is_verified FROM users WHERE id = ?");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+        
+        if (!$user || $user['is_verified']) {
+            jsonResponse(['error' => 'Account already verified or not found.'], 400);
+        }
+
+        $newOtp = sprintf("%06d", mt_rand(1, 999999));
+        $update = $conn->prepare("UPDATE users SET otp_code = ?, otp_expires_at = DATE_ADD(NOW(), INTERVAL 10 MINUTE) WHERE id = ?");
+        $update->bind_param("si", $newOtp, $userId);
+        $update->execute();
+        
+        sendOTP($user['email'], $user['name'], $newOtp);
+        logUserAction($conn, $userId, 'resend_otp', 'New OTP code requested and sent');
+
+        jsonResponse(['message' => 'A new code has been sent to your email.', 'status' => 'success']);
         break;
 
     // ── LOGIN ─────────────────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 <?php
+ob_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
+require_once 'config.php';
 require_once 'db.php';
 require_once 'google_config.php';
-
-if (session_status() === PHP_SESSION_NONE) session_start();
-
 if (!isset($_GET['code'])) {
     die("No authorization code provided.");
 }
@@ -40,6 +40,9 @@ if (isset($data['access_token'])) {
     }
     $updateSql .= " WHERE id = $userID";
     $conn->query($updateSql);
+
+    // ✅ AUTO-VERIFY: Mark the account as verified since they proved identity via Google
+    $conn->query("UPDATE users SET is_verified = 1 WHERE id = $userID");
 
     header("Location: profile.php?oauth=success");
 } else {

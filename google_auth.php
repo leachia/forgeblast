@@ -1,4 +1,5 @@
 <?php
+require_once 'config.php';
 require_once 'google_config.php';
 session_start();
 

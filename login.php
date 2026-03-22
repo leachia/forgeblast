@@ -47,34 +47,35 @@ session_start();
         @keyframes slideUpFade { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
     </style>
 </head>
-<body class="mesh-bg">
+<body>
+    <div class="mesh-bg"></div>
     <div class="auth-wrap">
         <div class="auth-card">
             <div class="brand">
                 <div class="brand-logo"><span>Blast</span>Forge</div>
-                <div class="brand-sub">Secure Access Terminal</div>
-            </div>
-
-            <div class="tab-switcher">
-                <button class="tab-btn-auth active" onclick="switchTab('login')" id="btn-login">Sign In</button>
-                <button class="tab-btn-auth" onclick="switchTab('register')" id="btn-register">Register</button>
+                <div class="brand-sub">Email Marketing Platform</div>
             </div>
 
             <!-- ── LOGIN FORM ─────────────────────────────────────── -->
             <div id="login-form" class="tab-form active">
                 <div class="form-field">
                     <label class="form-label">Email Address</label>
-                    <input type="email" id="login-email" class="form-input" placeholder="you@example.com" required>
+                    <input type="email" id="login-email" class="form-input" placeholder="Email" required>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Password</label>
-                    <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
+                    <input type="password" id="login-password" class="form-input" placeholder="Password" required>
                 </div>
                 <div class="error-msg" id="login-error"></div>
-                <button class="submit-btn" id="login-btn" onclick="doLogin()">
-                    <ion-icon name="log-in-outline" style="vertical-align:middle; margin-right:6px;"></ion-icon>
-                    Sign In
-                </button>
+                <div style="display:flex; gap:1rem; align-items:center; margin-top:0.5rem;">
+                    <button class="submit-btn" id="login-btn" onclick="doLogin()" style="flex:1; margin-top:0;">
+                        <ion-icon name="log-in-outline" style="vertical-align:middle; margin-right:6px;"></ion-icon>
+                        Sign In
+                    </button>
+                    <button type="button" onclick="switchTab('register')" style="background:transparent; border:none; color:var(--text-dim); cursor:pointer; font-weight:700; font-size:0.85rem; font-family:inherit; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-dim)'">
+                        Register
+                    </button>
+                </div>
             </div>
 
             <!-- ── REGISTER FORM ──────────────────────────────────── -->
@@ -85,26 +86,31 @@ session_start();
                 </div>
                 <div class="form-field">
                     <label class="form-label">Email Address</label>
-                    <input type="email" id="reg-email" class="form-input" placeholder="you@example.com" required>
+                    <input type="email" id="reg-email" class="form-input" placeholder="Email" required>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Password</label>
-                    <input type="password" id="reg-password" class="form-input" placeholder="Min. 6 characters" required>
+                    <input type="password" id="reg-password" class="form-input" placeholder="Password" required>
                 </div>
                 <div class="form-field">
                     <label class="form-label">
                         <ion-icon name="key-outline" style="vertical-align:middle;"></ion-icon>
-                        Branch / Referral Code
+                        Referral Code
                     </label>
                     <input type="text" id="reg-code" class="form-input" placeholder="Provided by your Admin" required style="letter-spacing:2px; text-transform:uppercase;">
-                    <small style="color:var(--text-dim); font-size:0.72rem; margin-top:0.4rem; display:block;">Ask your administrator for your branch code.</small>
+                    <small style="color:var(--text-dim); font-size:0.72rem; margin-top:0.4rem; display:block;">Ask your administrator for your referral code.</small>
                 </div>
                 <div class="error-msg" id="reg-error"></div>
                 <div class="success-msg" id="reg-success"></div>
-                <button class="submit-btn" id="reg-btn" onclick="doRegister()">
-                    <ion-icon name="person-add-outline" style="vertical-align:middle; margin-right:6px;"></ion-icon>
-                    Create Account
-                </button>
+                <div style="display:flex; gap:1rem; align-items:center; margin-top:0.5rem;">
+                    <button class="submit-btn" id="reg-btn" onclick="doRegister()" style="flex:1; margin-top:0;">
+                        <ion-icon name="person-add-outline" style="vertical-align:middle; margin-right:6px;"></ion-icon>
+                        Create Account
+                    </button>
+                    <button type="button" onclick="switchTab('login')" style="background:transparent; border:none; color:var(--text-dim); cursor:pointer; font-weight:700; font-size:0.85rem; font-family:inherit; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-dim)'">
+                        Sign In
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -121,6 +127,11 @@ session_start();
                 <ion-icon name="checkmark-circle-outline" style="vertical-align:middle; margin-right:6px;"></ion-icon>
                 Verify & Login
             </button>
+            <div style="margin-top:1.5rem;">
+                <button type="button" onclick="resendOTP()" style="background:transparent; border:none; color:var(--text-dim); cursor:pointer; font-size:0.75rem; font-weight:700;">
+                    Didn't receive the code? <span style="color:var(--primary);">Resend Code</span>
+                </button>
+            </div>
             <input type="hidden" id="pending-user-id">
         </div>
     </div>
@@ -128,9 +139,7 @@ session_start();
     <script>
         function switchTab(type) {
             document.querySelectorAll('.tab-form').forEach(f => f.classList.remove('active'));
-            document.querySelectorAll('.tab-btn-auth').forEach(b => b.classList.remove('active'));
             document.getElementById(`${type}-form`).classList.add('active');
-            document.getElementById(`btn-${type}`).classList.add('active');
             ['login-error','reg-error','reg-success','otp-error'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.classList.remove('show');
@@ -162,6 +171,12 @@ session_start();
                 if (res.ok) {
                     btn.textContent = 'Welcome! Redirecting...';
                     window.location.href = 'index.php';
+                } else if (data.needs_verification) {
+                    showError('login-error', data.error || 'Please verify your account.');
+                    document.getElementById('pending-user-id').value = data.user_id;
+                    setTimeout(() => {
+                         document.getElementById('otp-overlay').classList.add('open');
+                    }, 500);
                 } else {
                     showError('login-error', data.error || 'Login failed.');
                     btn.disabled = false;
@@ -183,8 +198,8 @@ session_start();
             document.getElementById('reg-error').classList.remove('show');
             document.getElementById('reg-success').classList.remove('show');
 
-            if (!name || !email || !password || !referral_code)
-                return showError('reg-error', 'All fields including the branch code are required.');
+            if (!name || !email || !password)
+                return showError('reg-error', 'Name, Email, and Password are required.');
             if (password.length < 6)
                 return showError('reg-error', 'Password must be at least 6 characters.');
 
@@ -197,9 +212,11 @@ session_start();
                     body: JSON.stringify({ name, email, password, referral_code })
                 });
                 const data = await res.json();
-                if (res.ok && data.user_id) {
-                    document.getElementById('pending-user-id').value = data.user_id;
-                    document.getElementById('otp-overlay').classList.add('open');
+                if (res.ok) {
+                    if (data.user_id) {
+                        document.getElementById('pending-user-id').value = data.user_id;
+                        document.getElementById('otp-overlay').classList.add('open');
+                    }
                 } else {
                     showError('reg-error', data.error || 'Registration failed.');
                 }
@@ -214,6 +231,7 @@ session_start();
             const userId = document.getElementById('pending-user-id').value;
             const otp_code = document.getElementById('otp-code').value.trim();
             document.getElementById('otp-error').classList.remove('show');
+            document.getElementById('otp-error').style.color = '#f87171';
 
             if (otp_code.length !== 6) return showError('otp-error', 'Enter the 6-digit code.');
 
@@ -228,6 +246,29 @@ session_start();
                     window.location.href = 'index.php';
                 } else {
                     showError('otp-error', data.error || 'Invalid code. Try again.');
+                }
+            } catch(e) {
+                showError('otp-error', 'Connection error.');
+            }
+        }
+
+        async function resendOTP() {
+            const userId = document.getElementById('pending-user-id').value;
+            if (!userId) return;
+            
+            try {
+                const res = await fetch('auth_api.php?action=resend_otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showError('otp-error', 'Success! A new code has been sent.');
+                    document.getElementById('otp-error').style.color = '#34d399';
+                } else {
+                    showError('otp-error', data.error || 'Failed to resend code.');
+                    document.getElementById('otp-error').style.color = '#f87171';
                 }
             } catch(e) {
                 showError('otp-error', 'Connection error.');
