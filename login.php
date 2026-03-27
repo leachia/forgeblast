@@ -152,6 +152,8 @@ session_start();
             el.classList.add('show');
         }
 
+        let is2FA = false;
+
         async function doLogin() {
             const btn = document.getElementById('login-btn');
             const email = document.getElementById('login-email').value.trim();
@@ -168,15 +170,21 @@ session_start();
                     body: JSON.stringify({ email, password })
                 });
                 const data = await res.json();
-                if (res.ok) {
+                if (data.status === 'success') {
                     btn.textContent = 'Welcome! Redirecting...';
                     window.location.href = 'index.php';
+                } else if (data.status === '2fa_required') {
+                    is2FA = true;
+                    document.getElementById('pending-user-id').value = data.user_id;
+                    document.querySelector('#otp-overlay h2').textContent = 'Two-Factor Auth';
+                    document.querySelector('#otp-overlay p').textContent = 'Your account is protected. Enter the code sent to your email.';
+                    document.getElementById('otp-overlay').classList.add('open');
                 } else if (data.needs_verification) {
                     showError('login-error', data.error || 'Please verify your account.');
+                    is2FA = false;
                     document.getElementById('pending-user-id').value = data.user_id;
-                    setTimeout(() => {
-                         document.getElementById('otp-overlay').classList.add('open');
-                    }, 500);
+                    document.querySelector('#otp-overlay h2').textContent = 'Verify Your Email';
+                    document.getElementById('otp-overlay').classList.add('open');
                 } else {
                     showError('login-error', data.error || 'Login failed.');
                     btn.disabled = false;
@@ -214,6 +222,7 @@ session_start();
                 const data = await res.json();
                 if (res.ok) {
                     if (data.user_id) {
+                        is2FA = false;
                         document.getElementById('pending-user-id').value = data.user_id;
                         document.getElementById('otp-overlay').classList.add('open');
                     }
@@ -235,14 +244,16 @@ session_start();
 
             if (otp_code.length !== 6) return showError('otp-error', 'Enter the 6-digit code.');
 
+            const action = is2FA ? 'verify_2fa' : 'verify';
+
             try {
-                const res = await fetch('auth_api.php?action=verify', {
+                const res = await fetch(`auth_api.php?action=${action}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: userId, otp_code })
                 });
                 const data = await res.json();
-                if (res.ok) {
+                if (data.status === 'success') {
                     window.location.href = 'index.php';
                 } else {
                     showError('otp-error', data.error || 'Invalid code. Try again.');
@@ -274,6 +285,17 @@ session_start();
                 showError('otp-error', 'Connection error.');
             }
         }
+
+        // Auto-fill referral from URL (Link to start)
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const ref = params.get('ref');
+            if (ref) {
+                switchTab('register');
+                const regCode = document.getElementById('reg-code');
+                if (regCode) regCode.value = ref;
+            }
+        });
 
         // Allow Enter key on login
         document.addEventListener('keydown', (e) => {

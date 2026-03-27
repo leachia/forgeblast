@@ -57,7 +57,12 @@ if ($user['role'] === 'super_admin') {
         .profile-page { max-width: 1200px; margin: 0 auto; padding: 2rem; }
         .profile-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:2.5rem; }
         .profile-grid { display:grid; grid-template-columns:300px 1fr; gap:2rem; }
-        @media(max-width:900px) { .profile-grid { grid-template-columns:1fr; } }
+        @media(max-width:992px) { 
+            .profile-grid { grid-template-columns:1fr; } 
+            .profile-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            .profile-page { padding: 1rem; }
+            .fields-grid { grid-template-columns: 1fr; }
+        }
 
         /* Sidebar */
         .sidebar-card { background:var(--card-bg); border:1px solid var(--border); border-radius:1.25rem; padding:2rem; text-align:center; }
@@ -142,13 +147,15 @@ if ($user['role'] === 'super_admin') {
 
     <!-- ── Header ──────────────────────────────────────────────────────── -->
     <div class="profile-header">
-        <button onclick="window.location.href='index.php'" style="background:transparent; border:none; color:var(--text-dim); cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-family:inherit; font-weight:700; font-size:0.85rem; letter-spacing:1px;">
+        <button onclick="window.location.href='index.php'" style="background:var(--card-bg); border:1px solid var(--border); color:var(--text-dim); cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-family:inherit; font-weight:700; font-size:0.85rem; letter-spacing:1px; padding:0.5rem 1rem; border-radius:0.5rem;">
             <ion-icon name="chevron-back-outline"></ion-icon> Dashboard
         </button>
-        <h1 style="font-size:1.5rem; font-weight:800;">My <span style="color:var(--primary);">Profile</span></h1>
-        <a href="auth_api.php?action=logout" style="background:transparent; border:1px solid var(--border); color:var(--text-dim); padding:0.5rem 1rem; border-radius:0.5rem; text-decoration:none; font-size:0.8rem; font-weight:600;">
-            <ion-icon name="log-out-outline" style="vertical-align:middle;"></ion-icon> Logout
-        </a>
+        <h1 style="font-size:1.5rem; font-weight:800; margin: 1rem 0;">My <span style="color:var(--primary);">Profile</span></h1>
+        <div style="display:flex; gap:1rem; width:100%; justify-content: space-between; align-items:center;">
+             <a href="auth_api.php?action=logout" style="background:transparent; border:1px solid var(--border); color:var(--text-dim); padding:0.5rem 1rem; border-radius:0.5rem; text-decoration:none; font-size:0.8rem; font-weight:600;">
+                <ion-icon name="log-out-outline" style="vertical-align:middle;"></ion-icon> Logout
+            </a>
+        </div>
     </div>
 
     <?php if ($user['role'] === 'super_admin'): ?>
@@ -182,8 +189,10 @@ if ($user['role'] === 'super_admin') {
             <div id="users-grid" class="users-grid">
                 <?php foreach ($allUsers as $u): ?>
                 <?php 
-                    // Hide regular users who were referred by OTHER admins
-                    if ($u['id'] !== $userId && $u['role'] === 'user' && !empty($u['referred_by_admin_id']) && $u['referred_by_admin_id'] != $userId) {
+                    // 🛡️ SUPER ADMIN HIERARCHY FILTER
+                    // At the top level "All Users" view, Super Admin ONLY wants to see Admins (Tier 2).
+                    // Subordinate Staff and Users are hidden as they belong inside Admin branches.
+                    if ($u['id'] !== $userId && $u['role'] !== 'admin') {
                         continue; 
                     }
                 ?>
@@ -289,6 +298,16 @@ if ($user['role'] === 'super_admin') {
                         </div>
 
                         <div class="form-section-title">Gmail OAuth2</div>
+                        <div class="fields-grid" style="margin-bottom: 1.5rem;">
+                            <div>
+                                <label class="field-label">Google Client ID</label>
+                                <input type="text" name="google_client_id" class="field-input" placeholder="984...apps.googleusercontent.com" value="<?php echo htmlspecialchars($user['google_client_id'] ?? ''); ?>">
+                            </div>
+                            <div>
+                                <label class="field-label">Google Client Secret</label>
+                                <input type="text" name="google_client_secret" class="field-input" placeholder="GOCSPX-..." value="<?php echo htmlspecialchars($user['google_client_secret'] ?? ''); ?>">
+                            </div>
+                        </div>
                         <?php if (!empty($user['google_refresh_token'])): ?>
                         <div class="oauth-connected">
                             <ion-icon name="checkmark-circle" style="font-size:1.3rem;"></ion-icon>
@@ -433,6 +452,20 @@ if ($user['role'] === 'super_admin') {
 
                     <!-- ── Email Setup ─────────────────────────────── -->
                     <div class="ctab-panel" id="tab-smtp">
+                        <?php if($_SESSION['role'] === 'admin' || $_SESSION['role'] === 'super_admin'): ?>
+                        <div class="form-section-title">Individual Google OAuth2 App (Optional)</div>
+                        <div class="fields-grid" style="margin-bottom: 1.5rem;">
+                            <div>
+                                <label class="field-label">Google Client ID</label>
+                                <input type="text" name="google_client_id" class="field-input" placeholder="984...apps.googleusercontent.com" value="<?php echo htmlspecialchars($user['google_client_id'] ?? ''); ?>">
+                            </div>
+                            <div>
+                                <label class="field-label">Google Client Secret</label>
+                                <input type="text" name="google_client_secret" class="field-input" placeholder="GOCSPX-..." value="<?php echo htmlspecialchars($user['google_client_secret'] ?? ''); ?>">
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
                         <div class="form-section-title">Gmail OAuth2 (Recommended)</div>
                         <?php if (!empty($user['google_refresh_token'])): ?>
                         <div class="oauth-connected" style="margin-bottom:1.5rem;">
@@ -494,10 +527,16 @@ if ($user['role'] === 'super_admin') {
                             <input type="checkbox" name="email_notifications" value="1" <?php echo ($user['email_notifications'] ? 'checked' : ''); ?> style="width:18px; height:18px;">
                             <span>Email Notifications</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:1rem; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:1rem; cursor:pointer; margin-bottom:1rem;">
                             <input type="checkbox" name="dark_mode" value="1" <?php echo ($user['dark_mode'] ? 'checked' : ''); ?> style="width:18px; height:18px;">
                             <span>Dark Mode</span>
                         </label>
+                        <div class="form-section-title" style="margin-top:2rem;">Security & Privacy</div>
+                        <label style="display:flex; align-items:center; gap:1rem; cursor:pointer; margin-bottom:1rem;">
+                            <input type="checkbox" name="two_factor_enabled" value="1" <?php echo ($user['two_factor_enabled'] ? 'checked' : ''); ?> style="width:18px; height:18px;">
+                            <span style="font-weight:800; color:var(--primary-bright);"><ion-icon name="shield-checkmark-outline" style="vertical-align:middle;"></ion-icon> Enable Two-Factor Authentication (Email OTP)</span>
+                        </label>
+                        <p style="font-size:0.7rem; color:var(--text-dim); margin-left:2.3rem;">Extra layer of safety: When logging in, we'll send a code to your registered email to verify your identity.</p>
                     </div>
 
                     <!-- Save Button (visible across all tabs for regular users) -->
@@ -569,8 +608,37 @@ if ($user['role'] === 'super_admin') {
                 <input type="text" id="eu-address" name="address" class="field-input">
             </div>
             <div style="margin-bottom:1.25rem;">
-                <label class="field-label">ID Info</label>
+                <label class="field-label">ID Info / Sourcing Credentials</label>
                 <textarea id="eu-id-info" name="id_info" class="field-input" rows="2"></textarea>
+            </div>
+            <div style="margin-bottom:1.25rem;">
+                <label class="field-label">Profile Bio / Signature</label>
+                <textarea id="eu-bio" name="bio" class="field-input" rows="2"></textarea>
+            </div>
+            <div class="fields-grid">
+                <div>
+                    <label class="field-label">Personal Gmail</label>
+                    <input type="email" id="eu-gmail" name="gmail" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">Facebook Profile</label>
+                    <input type="url" id="eu-facebook" name="facebook" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">Instagram Profile</label>
+                    <input type="url" id="eu-instagram" name="instagram" class="field-input">
+                </div>
+            </div>
+            <div class="form-section-title">Individual Google OAuth2 Credentials</div>
+            <div class="fields-grid">
+                <div>
+                    <label class="field-label">Google Client ID</label>
+                    <input type="text" id="eu-g-id" name="google_client_id" class="field-input">
+                </div>
+                <div>
+                    <label class="field-label">Google Client Secret</label>
+                    <input type="text" id="eu-g-secret" name="google_client_secret" class="field-input">
+                </div>
             </div>
             <div class="fields-grid">
                 <div>
@@ -669,22 +737,27 @@ function previewAvatar(input) {
 async function saveProfile(e) {
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
-    const prev = btn.innerHTML; btn.disabled = true; btn.textContent = 'Saving...';
+    const prev = btn.innerHTML; btn.disabled = true; btn.textContent = 'Synchronizing...';
 
     const fd = new FormData(e.target);
-    // handle avatar
     const avatarFile = document.getElementById('avatar-file')?.files[0];
     if (avatarFile) fd.append('avatar', avatarFile);
-    fd.append('email_notifications', e.target.querySelector('[name="email_notifications"]')?.checked ? '1' : '0');
-    fd.append('dark_mode', e.target.querySelector('[name="dark_mode"]')?.checked ? '1' : '0');
 
     try {
-        const res = await fetch('api.php?action=updateProfile', { method:'POST', headers:{'X-CSRF-TOKEN': window.csrfToken}, body:fd });
+        const res = await fetch('api.php?action=updateProfile', { 
+            method:'POST', 
+            headers:{'X-CSRF-TOKEN': window.csrfToken}, 
+            body:fd 
+        });
         const data = await res.json();
-        if (res.ok) showToast(data.message || 'Profile saved!');
-        else showToast(data.error || 'Error saving profile.', 'error');
+        if (data.status === 'success') {
+            showToast(data.message || 'Profile optimized and saved!');
+            setTimeout(() => location.reload(), 1000); 
+        } else {
+            showToast(data.error || 'Sync failed.', 'error');
+        }
     } catch(ex) {
-        showToast('Error: ' + ex.message, 'error');
+        showToast('Connectivity error: ' + ex.message, 'error');
     }
     btn.disabled = false; btn.innerHTML = prev;
 }
@@ -692,15 +765,27 @@ async function saveProfile(e) {
 // ── Save Super Admin own Profile ──────────────────────────────────────────
 async function saveSAProfile(e) {
     e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const prev = btn.innerHTML; btn.disabled = true; btn.textContent = 'Authenticating...';
+    
     const fd = new FormData(e.target);
     try {
-        const res = await fetch('api.php?action=updateProfile', { method:'POST', headers:{'X-CSRF-TOKEN': window.csrfToken}, body:fd });
+        const res = await fetch('api.php?action=updateProfile', { 
+            method:'POST', 
+            headers:{'X-CSRF-TOKEN': window.csrfToken}, 
+            body:fd 
+        });
         const data = await res.json();
-        if (res.ok) showToast(data.message || 'Profile saved!');
-        else showToast(data.error || 'Error.', 'error');
+        if (data.status === 'success') {
+            showToast('Master Profile Updated!');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Authorization Fail.', 'error');
+        }
     } catch(ex) {
-        showToast('Error: ' + ex.message, 'error');
+        showToast('Fatal connection error.', 'error');
     }
+    btn.disabled = false; btn.innerHTML = prev;
 }
 
 // ── Change Role ───────────────────────────────────────────────────────────
@@ -742,6 +827,12 @@ function openEditModal(u) {
     document.getElementById('eu-location').value  = u.location  || '';
     document.getElementById('eu-address').value   = u.address   || '';
     document.getElementById('eu-id-info').value   = u.id_info   || '';
+    document.getElementById('eu-bio').value       = u.bio       || '';
+    document.getElementById('eu-gmail').value     = u.gmail     || '';
+    document.getElementById('eu-facebook').value  = u.facebook  || '';
+    document.getElementById('eu-instagram').value = u.instagram || '';
+    document.getElementById('eu-g-id').value      = u.google_client_id || '';
+    document.getElementById('eu-g-secret').value  = u.google_client_secret || '';
     document.getElementById('eu-role').value      = u.role      || 'user';
     document.getElementById('eu-status').value    = u.status    || 'active';
     document.getElementById('eu-verified').value  = u.is_verified ? '1' : '0';
